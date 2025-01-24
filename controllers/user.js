@@ -28,7 +28,6 @@ exports.signup = async (req, res) => {
       mobile,
     });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
     res.status(201).json({
       success: true,
@@ -68,9 +67,14 @@ exports.login = async (req, res) => {
       });
     }
 
+    console.log(user.name)
+
     //If password match then create jwt token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-    res.status(200).json({
+    const token = jwt.sign(
+      { id: user._id, userName:user.name },
+      process.env.JWT_SECRET
+    );
+        res.status(200).json({
       success: true,
       message: "Login successful! Welcome back!",
       token,
@@ -83,3 +87,33 @@ exports.login = async (req, res) => {
     });
   }
 };
+
+// get user details
+exports.getUser = async(req, res) => {
+  try{
+    const token = req.headers['authorization'];
+    console.log(token)
+    if(!token){
+      return res.status(400).json({
+        success:false,
+        message:"No token provided",
+      })
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log(decoded)
+    const name = decoded.userName;
+    const id = decoded.id;
+    console.log(name, id)
+    res.status(200).json({
+      success:true,
+      id:id,
+      name:name
+    })
+  } catch(error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong. Please try again later",
+    })
+  }
+}
