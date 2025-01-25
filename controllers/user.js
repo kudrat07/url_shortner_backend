@@ -32,7 +32,6 @@ exports.signup = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Sign up successfull",
-      token,
       username: user.name,
     });
   } catch (error) {
