@@ -40,6 +40,6 @@ router.post("/", shortUrlHandler);
 router.get("/:shortUrl", newUrl);
 
 // routes for getting total counts of all
-// router.get("/count", getCount);
+router.get("/total/count", getCount);
 
 module.exports = router;

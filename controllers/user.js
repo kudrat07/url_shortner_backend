@@ -78,7 +78,10 @@ exports.login = async (req, res) => {
       success: true,
       message: "Login successful! Welcome back!",
       token,
-      id:user._id
+      id:user._id,
+      name: user.name,
+      mobile:user.mobile,
+      email:user.email
     });
   } catch (error) {
     console.error(error);
