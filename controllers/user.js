@@ -28,11 +28,13 @@ exports.signup = async (req, res) => {
       mobile,
     });
 
-
     res.status(201).json({
       success: true,
       message: "Sign up successfull",
-      username: user.name,
+      name: user.name,
+      mobile:user.mobile,
+      email:user.email
+      
     });
   } catch (error) {
     console.error(error);
@@ -66,17 +68,17 @@ exports.login = async (req, res) => {
       });
     }
 
-    console.log(user.name)
 
     //If password match then create jwt token
     const token = jwt.sign(
-      { id: user._id, userName:user.name },
+      { id: user._id, userName: user.name },
       process.env.JWT_SECRET
     );
-        res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Login successful! Welcome back!",
       token,
+      id:user._id
     });
   } catch (error) {
     console.error(error);
@@ -88,31 +90,104 @@ exports.login = async (req, res) => {
 };
 
 // get user details
-exports.getUser = async(req, res) => {
-  try{
-    const token = req.headers['authorization'];
-    console.log(token)
-    if(!token){
+exports.getUser = async (req, res) => {
+  try {
+    const token = req.headers["authorization"];
+    console.log(token);
+    if (!token) {
       return res.status(400).json({
-        success:false,
-        message:"No token provided",
-      })
+        success: false,
+        message: "No token provided",
+      });
     }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(decoded)
+    console.log(decoded);
     const name = decoded.userName;
     const id = decoded.id;
-    console.log(name, id)
+    console.log(name, id);
     res.status(200).json({
-      success:true,
-      id:id,
-      name:name
-    })
-  } catch(error) {
+      success: true,
+      id: id,
+      name: name,
+    });
+  } catch (error) {
     console.error(error);
     res.status(500).json({
       success: false,
       message: "Something went wrong. Please try again later",
-    })
+    });
   }
-}
+};
+
+//DELETE USER ACCOUNT
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(id);
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "User id not provided",
+      });
+    }
+    const user = await User.findByIdAndDelete({ _id: id });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No user found",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Account deleted!",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
+
+// UPDATE USER ACCOUNT
+exports.updateUser = async (req, res) => {
+  try {
+    const { name, email, mobile } = req.body;
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "id not provided",
+      });
+    }
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { name, email, mobile },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully!",
+      name:updatedUser.name,
+      email:updatedUser.email,
+      mobile:updatedUser.mobile,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
