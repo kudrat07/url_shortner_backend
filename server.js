@@ -16,6 +16,7 @@ app.get("/", (req, res) => {
 
 const userRouter = require("./routes/routes");
 app.use("/api/v1", userRouter);
+app.use("/", userRouter);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -26,7 +27,7 @@ app.use((req, res) => {
 // db connection call
 connectDB()
   .then(() => {
-    app.listen(PORT, () => {
+    app.listen(PORT || 6000, () => {
       console.log(`Server is up and running on PORT no ${PORT}`);
     });
   })

@@ -2,10 +2,13 @@ const mongoose = require("mongoose");
 
 const urlSchema = new mongoose.Schema(
   {
-    shortUrl: {
+    shortId: {
       type: String,
       required: true,
       unique: true,
+    },
+    shortUrl: {
+        type: String,
     },
     originalUrl: {
       type: String,

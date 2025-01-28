@@ -17,7 +17,7 @@ const { loginValidationRules } = require("../validations/loginValidationRules");
 
 const { handleValidation } = require("../middlewares/handleValidation");
 
-const { shortUrlHandler, newUrl, getCount} = require("../controllers/url");
+const { shortUrlHandler, newUrl, getCount } = require("../controllers/url");
 
 //ROUTES FOR SIGN UP
 router.post("/signup", signupValidationRules, handleValidation, signup);
@@ -34,10 +34,10 @@ router.delete("/delete/:id", deleteUser);
 router.put("/update/:id", updateUser);
 
 // * ROUTES FOR LINKS
-router.post("/", shortUrlHandler);
+router.post("/url", shortUrlHandler);
 
 //routes for getting shortUrl to redirect
-router.get("/:shortUrl", newUrl);
+router.get("/:shortId", newUrl);
 
 // routes for getting total counts of all
 router.get("/total/count", getCount);

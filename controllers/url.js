@@ -1,19 +1,23 @@
 const URL = require("../models/url");
 const crypto = require("crypto");
+const BASE_URL = "localhost:8080";
 
 exports.shortUrlHandler = async (req, res) => {
   try {
-    const { originalUrl } = req.body;
-    if (!originalUrl) {
+    const { originalUrl, remark } = req.body;
+    if (!originalUrl || !remark) {
       return res.status(400).json({
         message: "Original url is required",
       });
     }
-    const shortUrl = crypto.randomBytes(4).toString("hex");
-    console.log(shortUrl);
+    const shortId = crypto.randomBytes(4).toString("hex");
+    console.log(shortId);
+    const shortUrl = `${BASE_URL}/${shortId}`;
     const url = await URL.create({
+      shortId,
       shortUrl,
       originalUrl,
+      remark,
       visitHistory: [],
     });
 
@@ -33,10 +37,10 @@ exports.shortUrlHandler = async (req, res) => {
 
 exports.newUrl = async (req, res) => {
   try {
-    const { shortUrl } = req.params;
+    const { shortId } = req.params;
 
-    // Find the URL document by shortUrl
-    const entry = await URL.findOne({ shortUrl });
+    // Find the URL document by shortId
+    const entry = await URL.findOne({ shortId });
 
     if (!entry) {
       return res.status(404).json({ message: "URL not found" });
