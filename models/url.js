@@ -8,17 +8,26 @@ const urlSchema = new mongoose.Schema(
       unique: true,
     },
     shortUrl: {
-        type: String,
+      type: String,
     },
     originalUrl: {
       type: String,
       required: true,
     },
-    remark:{
-      type:String,
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
     },
-    expiryDate:{
+    remark: {
+      type: String,
+      required: true,
+    },
+    status: {
+      type: String,
+      default: "Active",
+    },
+    expiryDate: {
       type: Date,
     },
     visitHistory: [

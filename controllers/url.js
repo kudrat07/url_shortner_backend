@@ -1,13 +1,29 @@
 const URL = require("../models/url");
+const User = require("../models/userSchema");
 const crypto = require("crypto");
-const BASE_URL = "localhost:8080";
+// const BASE_URL = "localhost:8080";
+const BASE_URL = "https://url-shortner-backend-y538.onrender.com";
 
 exports.shortUrlHandler = async (req, res) => {
   try {
     const { originalUrl, remark } = req.body;
+    const { userId } = req.params;
+    console.log(userId);
+    if (!userId) {
+      return res.status(400).json({
+        message: "Please provide user Id",
+      });
+    }
     if (!originalUrl || !remark) {
       return res.status(400).json({
         message: "Original url is required",
+      });
+    }
+    const isUser = await User.findById({ _id: userId });
+    console.log(isUser);
+    if (!isUser) {
+      return res.status(404).json({
+        message: "User with this  userId does not exist",
       });
     }
     const shortId = crypto.randomBytes(4).toString("hex");
@@ -18,6 +34,7 @@ exports.shortUrlHandler = async (req, res) => {
       shortUrl,
       originalUrl,
       remark,
+      userId,
       visitHistory: [],
     });
 
@@ -86,6 +103,33 @@ exports.getCount = async (req, res) => {
       success: true,
       totalClicks,
       analytics: allVisitHistory,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
+
+exports.getAllUrls = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({
+        message: "Please provide id",
+      });
+    }
+    const urls = await URL.find({ userId });
+    if (!urls) {
+      return res.status(200).json({
+        urls: [],
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      urls,
     });
   } catch (error) {
     console.error(error);
