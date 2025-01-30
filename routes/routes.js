@@ -22,6 +22,9 @@ const {
   newUrl,
   getCount,
   getAllUrls,
+  deleteUrl,
+  getUrl,
+  getUpdated,
 } = require("../controllers/url");
 
 //ROUTES FOR SIGN UP
@@ -47,6 +50,16 @@ router.get("/:shortId", newUrl);
 // routes for getting total counts of all
 router.get("/total/count", getCount);
 
+//routes for getting all urls
 router.get("/allUrls/:userId", getAllUrls);
+
+//routes for deleting a url
+router.delete("/delete/url/:id", deleteUrl)
+
+//routes for getting a specific url
+router.get("/url/:urlId", getUrl)
+
+//routes to get updated count and status
+router.get("/visit/:shortId", getUpdated)
 
 module.exports = router;

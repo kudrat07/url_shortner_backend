@@ -1,14 +1,12 @@
 const URL = require("../models/url");
 const User = require("../models/userSchema");
 const crypto = require("crypto");
-// const BASE_URL = "localhost:8080";
 const BASE_URL = "https://url-shortner-backend-y538.onrender.com";
 
 exports.shortUrlHandler = async (req, res) => {
   try {
-    const { originalUrl, remark } = req.body;
+    const { originalUrl, remark, expiryDate } = req.body;
     const { userId } = req.params;
-    console.log(userId);
     if (!userId) {
       return res.status(400).json({
         message: "Please provide user Id",
@@ -20,14 +18,12 @@ exports.shortUrlHandler = async (req, res) => {
       });
     }
     const isUser = await User.findById({ _id: userId });
-    console.log(isUser);
     if (!isUser) {
       return res.status(404).json({
         message: "User with this  userId does not exist",
       });
     }
     const shortId = crypto.randomBytes(4).toString("hex");
-    console.log(shortId);
     const shortUrl = `${BASE_URL}/${shortId}`;
     const url = await URL.create({
       shortId,
@@ -35,6 +31,7 @@ exports.shortUrlHandler = async (req, res) => {
       originalUrl,
       remark,
       userId,
+      expiryDate,
       visitHistory: [],
     });
 
@@ -56,24 +53,25 @@ exports.newUrl = async (req, res) => {
   try {
     const { shortId } = req.params;
 
-    // Find the URL document by shortId
     const entry = await URL.findOne({ shortId });
 
     if (!entry) {
       return res.status(404).json({ message: "URL not found" });
     }
 
-    // Increment count for the last visit or create a new visit entry
+    if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
+      return res.status(410).json({ message: "Link has expired" });
+    }
+
     const visitHistory = entry.visitHistory;
     if (visitHistory.length > 0) {
-      // Increment count for the last visit
       visitHistory[visitHistory.length - 1].count += 1;
     } else {
-      // Add a new visit entry
       visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
     }
 
-    // Save the updated document
+    entry.countOfUrl+=1;
+
     await entry.save();
 
     res.redirect(entry.originalUrl);
@@ -127,9 +125,24 @@ exports.getAllUrls = async (req, res) => {
         urls: [],
       });
     }
+
+
+    const urlsWithStatus = urls.map((url) => {
+      let status = "Active";
+      if (url.expiryDate && new Date(url.expiryDate) < new Date()) {
+        status = "Inactive";
+      }
+      return {
+        ...url.toObject(),
+        status, 
+      };
+    });
+
+
+
     return res.status(200).json({
       success: true,
-      urls,
+      urls: urlsWithStatus
     });
   } catch (error) {
     console.error(error);
@@ -139,3 +152,103 @@ exports.getAllUrls = async (req, res) => {
     });
   }
 };
+
+// DELETE A URL
+exports.deleteUrl = async (req, res) => {
+    try {
+      const {id} = req.params;
+      if(!id) {
+        return res.status(400).json({
+          message:"Link id is not provided"
+        })
+      }
+      const deletedUrl = await URL.findByIdAndDelete({_id: id})
+      if(!deletedUrl){
+        return res.status(400).json({
+          message:"URL not found"
+        })
+      }
+      res.status(200).json({
+        success: true,
+        message:"Link deleted",
+        deletedUrl
+      })
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        message:"Something went wrong while deleting link",
+        error:error.message
+      })
+      
+    }
+}
+
+// GET A PARTICULAR BY ID
+exports.getUrl = async(req, res) => {
+  try {
+    const {urlId} = req.params;
+    if(!urlId) {
+      return res.status(400).json({
+        success: false,
+        message:"Url id is required",
+      })
+    }
+    const isUrl = await URL.findById({_id: urlId})
+    if(!isUrl) {
+      return res.status(400).json({
+        success: false,
+        message:"Url doesn't exit"
+      })
+    }
+    res.status(200).json({
+      success: true,
+      originalUrl: isUrl.originalUrl,
+      remark:isUrl.remark,
+      expiryDate: isUrl.expiryDate
+    })
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message:"Something went wrong while fetching url by Id",
+      success: fasle,
+      error:error.message
+    })
+    
+  }
+}
+
+// GET UPDATED COUNT AND STATUS
+exports.getUpdated = async(req, res) => {
+  try {
+    const {shortId} = req.params;
+
+    const entry = await URL.findOne({shortId});
+
+    if(!entry) {
+      return res.status(404).json({message:"URL not found"})
+    }
+
+    // INCREMENT THE COUNT 
+    entry.countOfUrl += 1;
+
+    //Update the status based on expiry date
+    if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
+      entry.status = "Inactive";
+    } else {
+      entry.status = "Active";
+    }
+
+    // Save the updated entry
+    await entry.save();
+    
+    res.json({
+      countOfUrl: entry.countOfUrl,
+      status: entry.status,
+    })
+  } catch (error) {
+    res.status(500).json({
+      message:"Error updatingthe count and status",
+      error:error.message,
+    })
+  }
+}

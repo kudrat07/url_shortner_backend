@@ -30,6 +30,10 @@ const urlSchema = new mongoose.Schema(
     expiryDate: {
       type: Date,
     },
+    countOfUrl:{
+      type:Number,
+      default: 0,
+    },
     visitHistory: [
       {
         timestamp: { type: String, default: () => new Date().toISOString() },
