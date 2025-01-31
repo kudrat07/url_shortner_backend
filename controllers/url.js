@@ -134,20 +134,40 @@ exports.getAllUrls = async (req, res) => {
       });
     }
     const urls = await URL.find({ userId });
-    if (!urls) {
+    if (!urls || urls.length === 0) {
       return res.status(200).json({
         urls: [],
       });
     }
+
+    const formatDate = (date) => {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const newDate = new Date(date);
+      const month = months[newDate.getMonth()];
+      const day = newDate.getDate();
+      const year = newDate.getFullYear();
+      let hours = newDate.getHours();
+      const minutes = newDate.getMinutes().toString().padStart(2, '0');
+      const isAM = hours < 12;
+      
+      if (hours > 12) hours -= 12;  // Convert to 12-hour format
+      if (hours === 0) hours = 12;  // If hours is 0, set it to 12 (midnight)
+      const period = isAM ? 'AM' : 'PM';
+      
+      return `${month} ${day}, ${year} ${hours}:${minutes} ${period}`;
+    };
 
     const urlsWithStatus = urls.map((url) => {
       let status = "Active";
       if (url.expiryDate && new Date(url.expiryDate) < new Date()) {
         status = "Inactive";
       }
+
       return {
         ...url.toObject(),
         status,
+        createdAt: formatDate(url.createdAt),
+        updatedAt: formatDate(url.updatedAt),
       };
     });
 
@@ -163,6 +183,7 @@ exports.getAllUrls = async (req, res) => {
     });
   }
 };
+
 
 // DELETE A URL
 exports.deleteUrl = async (req, res) => {
@@ -309,14 +330,13 @@ exports.updateUrl = async (req, res) => {
 exports.getCount = async (req, res) => {
   try {
     const userId = req.params.userId; 
-    const results = await URL.find({ userId: userId }); 
+    const results = await URL.find({ userId: userId });
 
     if (!results || results.length === 0) {
       return res.status(200).json({});
     }
 
-    const totalCounts = results.reduce((sum, doc) => sum + doc.countOfUrl, 0);
-
+    // Initialize device counts for desktop, mobile, and tablet
     const deviceCounts = {
       desktop: 0,
       mobile: 0,
@@ -325,26 +345,22 @@ exports.getCount = async (req, res) => {
 
     const dateWiseClicks = {};
 
-    const getDeviceType = (userAgent) => {
-      const parser = new UAParser(userAgent);
-      const result = parser.getResult();
-      if (result.device.type === "mobile") return "mobile";
-      else if (result.device.type === "tablet") return "tablet";
-      return "desktop";
-    };
-
+    // Function to format the date for visit history
     const formatDate = (dateStr) => {
       const date = new Date(dateStr);
-      const day = String(date.getDate()).padStart(2, '0'); 
+      const day = String(date.getDate()).padStart(2, '0');
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const year = date.getFullYear();
       return `${day}-${month}-${year}`;
     };
 
+    // Loop through the URLs and accumulate counts based on deviceType
     results.forEach((doc) => {
+      const deviceType = doc.deviceType;
+      
+      // Loop through the visit history to accumulate counts
       doc.visitHistory.forEach((visit) => {
-        const deviceType = visit.deviceType || "other";
-        const visitDate = formatDate(visit.timestamp); 
+        const visitDate = formatDate(visit.timestamp);
 
         if (dateWiseClicks[visitDate]) {
           dateWiseClicks[visitDate] += visit.count;
@@ -352,14 +368,12 @@ exports.getCount = async (req, res) => {
           dateWiseClicks[visitDate] = visit.count;
         }
 
-        if (deviceType === "other") {
-          deviceCounts[getDeviceType(req.headers["user-agent"])] += visit.count;
-        } else {
-          if (deviceCounts.hasOwnProperty(deviceType)) {
-            deviceCounts[deviceType] += visit.count;
-          } else {
-            deviceCounts.other += visit.count;
-          }
+        if (deviceType === "Desktop") {
+          deviceCounts.desktop += visit.count;
+        } else if (deviceType === "mobile") {
+          deviceCounts.mobile += visit.count;
+        } else if (deviceType === "tablet") {
+          deviceCounts.tablet += visit.count;
         }
       });
     });
@@ -381,7 +395,7 @@ exports.getCount = async (req, res) => {
 
     const allVisitHistory = results.flatMap((doc) => doc.visitHistory);
 
-    // Convert deviceCounts object to an array format
+    // Convert deviceCounts object to an array format and include all device counts
     const deviceCountArray = Object.entries(deviceCounts).map(([name, count]) => ({
       name: name.charAt(0).toUpperCase() + name.slice(1),
       count,
@@ -389,7 +403,7 @@ exports.getCount = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      totalCounts,
+      totalCounts: results.reduce((sum, doc) => sum + doc.countOfUrl, 0),
       deviceCounts: deviceCountArray, 
       dateWiseClicks: dateWiseClickWithCumulative,
       analytics: allVisitHistory,
@@ -402,6 +416,16 @@ exports.getCount = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
 
 
 
