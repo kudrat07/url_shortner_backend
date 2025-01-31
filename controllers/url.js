@@ -35,17 +35,33 @@ exports.shortUrlHandler = async (req, res) => {
     const os = result.os.name || "Unknown OS";
     console.log("Operating System:", os);
 
-    
     let deviceType = result.device.type || "Desktop";
     if (deviceType === "other") {
-      deviceType = "Desktop"; 
+      deviceType = "Desktop";
     }
     console.log("Device Type:", deviceType);
 
-    const ipAddress =
-      req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    const getClientIp = (req) => {
+      let ipAddress =
+        req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-    console.log(ipAddress);
+        // If x-forwarded-for contains multiple IPs, use the first one
+      if (ipAddress && typeof ipAddress === "string") {
+        ipAddress = ipAddress.split(",")[0].trim();
+      }
+
+      // Remove potential IPv6 format prefix (::ffff:)
+      if (ipAddress.startsWith("::ffff:")) {
+        ipAddress = ipAddress.replace("::ffff:", "");
+      }
+
+      return ipAddress;
+    };
+
+    const ipAddress = getClientIp(req);
+    console.log("Client IP:", ipAddress);
+
+
     const shortId = crypto.randomBytes(4).toString("hex");
     const shortUrl = `${BASE_URL}/${shortId}`;
     const url = await URL.create({
@@ -81,7 +97,6 @@ exports.newUrl = async (req, res) => {
 
     const entry = await URL.findOne({ shortId });
 
-
     if (!entry) {
       return res.status(404).json({ message: "URL not found" });
     }
@@ -98,7 +113,6 @@ exports.newUrl = async (req, res) => {
     }
 
     entry.countOfUrl += 1;
-   
 
     await entry.save();
 
