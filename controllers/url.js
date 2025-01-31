@@ -42,24 +42,44 @@ exports.shortUrlHandler = async (req, res) => {
     console.log("Device Type:", deviceType);
 
     const getClientIp = (req) => {
-      let ipAddress =
-        req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-
-        // If x-forwarded-for contains multiple IPs, use the first one
-      if (ipAddress && typeof ipAddress === "string") {
-        ipAddress = ipAddress.split(",")[0].trim();
+      let ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    
+      if (ipAddress) {
+        // Extract the first valid IP and remove unnecessary prefixes
+        ipAddress = ipAddress.split(",").map(ip => ip.trim())[0];
+    
+        // Remove IPv6 prefix if present (::ffff:)
+        if (ipAddress.startsWith("::ffff:")) {
+          ipAddress = ipAddress.replace("::ffff:", "");
+        }
+    
+        // Filter only public IPs by ignoring private/internal addresses
+        if (!isPublicIp(ipAddress)) {
+          return null;
+        }
       }
-
-      // Remove potential IPv6 format prefix (::ffff:)
-      if (ipAddress.startsWith("::ffff:")) {
-        ipAddress = ipAddress.replace("::ffff:", "");
-      }
-
-      return ipAddress;
+    
+      return ipAddress || "No valid public IP found";
     };
-
+    
+    // Helper function to check if the IP is public
+    const isPublicIp = (ip) => {
+      const privateRanges = [
+        /^10\./,
+        /^172\.(1[6-9]|2[0-9]|3[01])\./,
+        /^192\.168\./,
+        /^127\./,
+        /^::1$/,
+        /^fc00:/,
+        /^fe80:/,
+      ];
+      return !privateRanges.some(range => range.test(ip));
+    };
+    
+    // Usage example
     const ipAddress = getClientIp(req);
-    console.log("Client IP:", ipAddress);
+    console.log("Client's Public IP:", ipAddress);
+    
 
 
     const shortId = crypto.randomBytes(4).toString("hex");
