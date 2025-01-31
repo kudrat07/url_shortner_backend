@@ -19,6 +19,8 @@
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
-    "nodemon": "^3.1.9"
+    "nodemon": "^3.1.9",
+    "ua-parser-js": "^2.0.0",
+    "useragent": "^2.3.0"
   }
 }

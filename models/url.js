@@ -30,9 +30,21 @@ const urlSchema = new mongoose.Schema(
     expiryDate: {
       type: Date,
     },
-    countOfUrl:{
-      type:Number,
+    countOfUrl: {
+      type: Number,
       default: 0,
+    },
+    ipAddress: {
+      type: String,
+      default: null,
+    },
+    deviceType: {
+      type: String,
+      default: null,
+    },
+    os: {
+      type: String,
+      default: null,
     },
     visitHistory: [
       {

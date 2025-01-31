@@ -1,6 +1,9 @@
 const URL = require("../models/url");
 const User = require("../models/userSchema");
 const crypto = require("crypto");
+const useragent = require("useragent");
+const { UAParser } = require("ua-parser-js");
+
 const BASE_URL = "https://url-shortner-backend-y538.onrender.com";
 
 exports.shortUrlHandler = async (req, res) => {
@@ -23,6 +26,26 @@ exports.shortUrlHandler = async (req, res) => {
         message: "User with this  userId does not exist",
       });
     }
+    const userAgent = req.headers["user-agent"];
+
+    console.log("User-Agent:", userAgent);
+    const parser = new UAParser(userAgent);
+    const result = parser.getResult();
+
+    const os = result.os.name || "Unknown OS";
+    console.log("Operating System:", os);
+
+    
+    let deviceType = result.device.type || "Desktop";
+    if (deviceType === "other") {
+      deviceType = "Desktop"; 
+    }
+    console.log("Device Type:", deviceType);
+
+    const ipAddress =
+      req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+    console.log(ipAddress);
     const shortId = crypto.randomBytes(4).toString("hex");
     const shortUrl = `${BASE_URL}/${shortId}`;
     const url = await URL.create({
@@ -32,6 +55,9 @@ exports.shortUrlHandler = async (req, res) => {
       remark,
       userId,
       expiryDate,
+      ipAddress,
+      os,
+      deviceType,
       visitHistory: [],
     });
 
@@ -55,6 +81,7 @@ exports.newUrl = async (req, res) => {
 
     const entry = await URL.findOne({ shortId });
 
+
     if (!entry) {
       return res.status(404).json({ message: "URL not found" });
     }
@@ -70,7 +97,8 @@ exports.newUrl = async (req, res) => {
       visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
     }
 
-    entry.countOfUrl+=1;
+    entry.countOfUrl += 1;
+   
 
     await entry.save();
 
@@ -126,7 +154,6 @@ exports.getAllUrls = async (req, res) => {
       });
     }
 
-
     const urlsWithStatus = urls.map((url) => {
       let status = "Active";
       if (url.expiryDate && new Date(url.expiryDate) < new Date()) {
@@ -134,15 +161,13 @@ exports.getAllUrls = async (req, res) => {
       }
       return {
         ...url.toObject(),
-        status, 
+        status,
       };
     });
 
-
-
     return res.status(200).json({
       success: true,
-      urls: urlsWithStatus
+      urls: urlsWithStatus,
     });
   } catch (error) {
     console.error(error);
@@ -155,80 +180,78 @@ exports.getAllUrls = async (req, res) => {
 
 // DELETE A URL
 exports.deleteUrl = async (req, res) => {
-    try {
-      const {id} = req.params;
-      if(!id) {
-        return res.status(400).json({
-          message:"Link id is not provided"
-        })
-      }
-      const deletedUrl = await URL.findByIdAndDelete({_id: id})
-      if(!deletedUrl){
-        return res.status(400).json({
-          message:"URL not found"
-        })
-      }
-      res.status(200).json({
-        success: true,
-        message:"Link deleted",
-        deletedUrl
-      })
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        message:"Something went wrong while deleting link",
-        error:error.message
-      })
-      
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({
+        message: "Link id is not provided",
+      });
     }
-}
+    const deletedUrl = await URL.findByIdAndDelete({ _id: id });
+    if (!deletedUrl) {
+      return res.status(400).json({
+        message: "URL not found",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Link deleted",
+      deletedUrl,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Something went wrong while deleting link",
+      error: error.message,
+    });
+  }
+};
 
 // GET A PARTICULAR BY ID
-exports.getUrl = async(req, res) => {
+exports.getUrl = async (req, res) => {
   try {
-    const {urlId} = req.params;
-    if(!urlId) {
+    const { urlId } = req.params;
+    if (!urlId) {
       return res.status(400).json({
         success: false,
-        message:"Url id is required",
-      })
+        message: "Url id is required",
+      });
     }
-    const isUrl = await URL.findById({_id: urlId})
-    if(!isUrl) {
+    const isUrl = await URL.findById({ _id: urlId });
+    if (!isUrl) {
       return res.status(400).json({
         success: false,
-        message:"Url doesn't exit"
-      })
+        message: "Url doesn't exit",
+      });
     }
     res.status(200).json({
       success: true,
       originalUrl: isUrl.originalUrl,
-      remark:isUrl.remark,
-      expiryDate: isUrl.expiryDate
-    })
+      remark: isUrl.remark,
+      expiryDate: isUrl.expiryDate,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({
-      message:"Something went wrong while fetching url by Id",
+      message: "Something went wrong while fetching url by Id",
       success: fasle,
-      error:error.message
-    })
-    
+      error: error.message,
+    });
   }
-}
+};
 
 // GET UPDATED COUNT AND STATUS
-exports.getUpdated = async(req, res) => {
+exports.getUpdated = async (req, res) => {
   try {
-    const {shortId} = req.params;
+    const { shortId } = req.params;
 
-    const entry = await URL.findOne({shortId});
+    const entry = await URL.findOne({ shortId });
 
-    if(!entry) {
-      return res.status(404).json({message:"URL not found"})
+    if (!entry) {
+      return res.status(404).json({ message: "URL not found" });
     }
 
-    // INCREMENT THE COUNT 
+    // INCREMENT THE COUNT
     entry.countOfUrl += 1;
 
     //Update the status based on expiry date
@@ -240,15 +263,15 @@ exports.getUpdated = async(req, res) => {
 
     // Save the updated entry
     await entry.save();
-    
+
     res.json({
       countOfUrl: entry.countOfUrl,
       status: entry.status,
-    })
+    });
   } catch (error) {
     res.status(500).json({
-      message:"Error updatingthe count and status",
-      error:error.message,
-    })
+      message: "Error updatingthe count and status",
+      error: error.message,
+    });
   }
-}
+};
