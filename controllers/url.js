@@ -6,6 +6,7 @@ const { UAParser } = require("ua-parser-js");
 
 const BASE_URL = "https://url-shortner-backend-y538.onrender.com";
 
+// Generate short URL and short Id
 exports.shortUrlHandler = async (req, res) => {
   try {
     const { originalUrl, remark, expiryDate } = req.body;
@@ -88,6 +89,7 @@ exports.shortUrlHandler = async (req, res) => {
   }
 };
 
+// Redirect to original url using shortURL
 exports.newUrl = async (req, res) => {
   try {
     const { shortId } = req.params;
@@ -122,34 +124,7 @@ exports.newUrl = async (req, res) => {
   }
 };
 
-exports.getCount = async (req, res) => {
-  try {
-    const results = await URL.find();
-
-    if (!results || results.length === 0) {
-      return res.status(404).json({
-        message: "No URL data found",
-      });
-    }
-
-    const allVisitHistory = results.flatMap((doc) => doc.visitHistory);
-
-    const totalClicks = allVisitHistory.length;
-
-    res.status(200).json({
-      success: true,
-      totalClicks,
-      analytics: allVisitHistory,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Something went wrong",
-      error: error.message,
-    });
-  }
-};
-
+// GET ALL URL
 exports.getAllUrls = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -218,7 +193,7 @@ exports.deleteUrl = async (req, res) => {
   }
 };
 
-// GET A PARTICULAR BY ID
+// GET A PARTICULAR URL BY ID
 exports.getUrl = async (req, res) => {
   try {
     const { urlId } = req.params;
@@ -252,37 +227,181 @@ exports.getUrl = async (req, res) => {
 };
 
 // GET UPDATED COUNT AND STATUS
-exports.getUpdated = async (req, res) => {
+
+// exports.getUpdated = async (req, res) => {
+//   try {
+//     const { shortId } = req.params;
+
+//     const entry = await URL.findOne({ shortId });
+
+//     if (!entry) {
+//       return res.status(404).json({ message: "URL not found" });
+//     }
+
+//     // INCREMENT THE COUNT
+//     entry.countOfUrl += 1;
+
+//     //Update the status based on expiry date
+//     if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
+//       entry.status = "Inactive";
+//     } else {
+//       entry.status = "Active";
+//     }
+
+//     // Save the updated entry
+//     await entry.save();
+
+//     res.json({
+//       countOfUrl: entry.countOfUrl,
+//       status: entry.status,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: "Error updatingthe count and status",
+//       error: error.message,
+//     });
+//   }
+// };
+
+// UPDATE A URL
+exports.updateUrl = async (req, res) => {
   try {
-    const { shortId } = req.params;
+    const { urlId } = req.params;
+    let { originalUrl, remark, expiryDate } = req.body;
 
-    const entry = await URL.findOne({ shortId });
-
-    if (!entry) {
-      return res.status(404).json({ message: "URL not found" });
+    if (!urlId) {
+      return res.status(400).json({
+        message: "URL id is not provided",
+      });
     }
 
-    // INCREMENT THE COUNT
-    entry.countOfUrl += 1;
-
-    //Update the status based on expiry date
-    if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
-      entry.status = "Inactive";
-    } else {
-      entry.status = "Active";
+    if (!expiryDate) {
+      expiryDate = null;
     }
 
-    // Save the updated entry
-    await entry.save();
+    const updatedUrl = await URL.findByIdAndUpdate(
+      urlId,
+      { originalUrl, remark, expiryDate },
+      { new: true, runValidators: true }
+    );
 
-    res.json({
-      countOfUrl: entry.countOfUrl,
-      status: entry.status,
+    if (!updatedUrl) {
+      return res.status(404).json({
+        message: "URL not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "URL updated successfully",
+      updatedUrl,
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Error updatingthe count and status",
+    console.error(error);
+    return res.status(500).json({
+      message: "Server error",
       error: error.message,
     });
   }
 };
+
+
+
+exports.getCount = async (req, res) => {
+  try {
+    const userId = req.params.userId; 
+    const results = await URL.find({ userId: userId }); 
+
+    if (!results || results.length === 0) {
+      return res.status(200).json({});
+    }
+
+    const totalCounts = results.reduce((sum, doc) => sum + doc.countOfUrl, 0);
+
+    const deviceCounts = {
+      desktop: 0,
+      mobile: 0,
+      tablet: 0,
+    };
+
+    const dateWiseClicks = {};
+
+    const getDeviceType = (userAgent) => {
+      const parser = new UAParser(userAgent);
+      const result = parser.getResult();
+      if (result.device.type === "mobile") return "mobile";
+      else if (result.device.type === "tablet") return "tablet";
+      return "desktop";
+    };
+
+    const formatDate = (dateStr) => {
+      const date = new Date(dateStr);
+      const day = String(date.getDate()).padStart(2, '0'); 
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    };
+
+    results.forEach((doc) => {
+      doc.visitHistory.forEach((visit) => {
+        const deviceType = visit.deviceType || "other";
+        const visitDate = formatDate(visit.timestamp); 
+
+        if (dateWiseClicks[visitDate]) {
+          dateWiseClicks[visitDate] += visit.count;
+        } else {
+          dateWiseClicks[visitDate] = visit.count;
+        }
+
+        if (deviceType === "other") {
+          deviceCounts[getDeviceType(req.headers["user-agent"])] += visit.count;
+        } else {
+          if (deviceCounts.hasOwnProperty(deviceType)) {
+            deviceCounts[deviceType] += visit.count;
+          } else {
+            deviceCounts.other += visit.count;
+          }
+        }
+      });
+    });
+
+    const dateWiseClickArray = Object.entries(dateWiseClicks)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const last5DateWiseClickArray = dateWiseClickArray.slice(0, 5);
+
+    let cumulativeClicks = 0;
+    const dateWiseClickWithCumulative = last5DateWiseClickArray.map(entry => {
+      cumulativeClicks += entry.count;
+      return {
+        ...entry,
+        cumulativeClicks,
+      };
+    });
+
+    const allVisitHistory = results.flatMap((doc) => doc.visitHistory);
+
+    // Convert deviceCounts object to an array format
+    const deviceCountArray = Object.entries(deviceCounts).map(([name, count]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      count,
+    }));
+
+    res.status(200).json({
+      success: true,
+      totalCounts,
+      deviceCounts: deviceCountArray, 
+      dateWiseClicks: dateWiseClickWithCumulative,
+      analytics: allVisitHistory,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
+
+
+
