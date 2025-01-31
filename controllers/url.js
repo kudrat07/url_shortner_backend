@@ -28,59 +28,36 @@ exports.shortUrlHandler = async (req, res) => {
     }
     const userAgent = req.headers["user-agent"];
 
-    console.log("User-Agent:", userAgent);
     const parser = new UAParser(userAgent);
     const result = parser.getResult();
 
     const os = result.os.name || "Unknown OS";
-    console.log("Operating System:", os);
 
     let deviceType = result.device.type || "Desktop";
     if (deviceType === "other") {
       deviceType = "Desktop";
     }
-    console.log("Device Type:", deviceType);
 
     const getClientIp = (req) => {
-      let ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    
-      if (ipAddress) {
-        // Extract the first valid IP and remove unnecessary prefixes
-        ipAddress = ipAddress.split(",").map(ip => ip.trim())[0];
-    
-        // Remove IPv6 prefix if present (::ffff:)
-        if (ipAddress.startsWith("::ffff:")) {
-          ipAddress = ipAddress.replace("::ffff:", "");
-        }
-    
-        // Filter only public IPs by ignoring private/internal addresses
-        if (!isPublicIp(ipAddress)) {
-          return null;
-        }
-      }
-    
-      return ipAddress || "No valid public IP found";
-    };
-    
-    // Helper function to check if the IP is public
-    const isPublicIp = (ip) => {
-      const privateRanges = [
-        /^10\./,
-        /^172\.(1[6-9]|2[0-9]|3[01])\./,
-        /^192\.168\./,
-        /^127\./,
-        /^::1$/,
-        /^fc00:/,
-        /^fe80:/,
-      ];
-      return !privateRanges.some(range => range.test(ip));
-    };
-    
-    // Usage example
-    const ipAddress = getClientIp(req);
-    console.log("Client's Public IP:", ipAddress);
-    
+      let ipAddress =
+        req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
+      // Extract the first IP from x-forwarded-for if present
+      if (ipAddress && typeof ipAddress === "string") {
+        ipAddress = ipAddress.split(",")[0].trim();
+      }
+
+      // Remove IPv6 prefix (::ffff:) if present
+      if (ipAddress.startsWith("::ffff:")) {
+        ipAddress = ipAddress.replace("::ffff:", "");
+      }
+
+      return ipAddress;
+    };
+
+    // Usage
+    const ipAddress = getClientIp(req);
+    console.log("Client's IP Address:", ipAddress);
 
     const shortId = crypto.randomBytes(4).toString("hex");
     const shortUrl = `${BASE_URL}/${shortId}`;
