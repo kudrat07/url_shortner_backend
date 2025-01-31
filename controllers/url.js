@@ -379,8 +379,9 @@ exports.getCount = async (req, res) => {
     });
 
     const dateWiseClickArray = Object.entries(dateWiseClicks)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  .map(([date, count]) => ({ date, count }))
+  .sort((a, b) => new Date(b.date) - new Date(a.date));  
+
 
     const last5DateWiseClickArray = dateWiseClickArray.slice(0, 5);
 
