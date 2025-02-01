@@ -13,44 +13,50 @@ exports.shortUrlHandler = async (req, res) => {
   try {
     const { originalUrl, remark, expiryDate } = req.body;
     const { userId } = req.params;
+
     if (!userId) {
       return res.status(400).json({
         message: "Please provide user Id",
       });
     }
+
     if (!originalUrl || !remark) {
       return res.status(400).json({
-        message: "Original url is required",
+        message: "Original URL and remark are required",
       });
     }
+
     const isUser = await User.findById({ _id: userId });
     if (!isUser) {
       return res.status(404).json({
-        message: "User with this  userId does not exist",
+        message: "User with this userId does not exist",
       });
     }
-    const userAgent = req.headers["user-agent"];
 
+    // Parse the User-Agent for OS and device detection
+    const userAgent = req.headers["user-agent"];
     const parser = new UAParser(userAgent);
     const result = parser.getResult();
 
     const os = result.os.name || "Unknown OS";
 
-    let deviceType = result.device.type;
-    if (deviceType === "other") {
+    // Improved device type detection with a fallback
+    let deviceType = result.device.type || "Desktop";
+
+    // Ensure valid device type value
+    if (deviceType === "other" || !deviceType) {
       deviceType = "Desktop";
     }
 
+    // IP extraction function
     const getClientIp = (req) => {
       let ipAddress =
         req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-      // Extract the first IP from x-forwarded-for if present
       if (ipAddress && typeof ipAddress === "string") {
         ipAddress = ipAddress.split(",")[0].trim();
       }
 
-      // Remove IPv6 prefix (::ffff:) if present
       if (ipAddress.startsWith("::ffff:")) {
         ipAddress = ipAddress.replace("::ffff:", "");
       }
@@ -58,12 +64,14 @@ exports.shortUrlHandler = async (req, res) => {
       return ipAddress;
     };
 
-    // Usage
     const ipAddress = getClientIp(req);
     console.log("Client's IP Address:", ipAddress);
 
+    // Generate a random shortId
     const shortId = crypto.randomBytes(4).toString("hex");
     const shortUrl = `${BASE_URL}/${shortId}`;
+
+    // Save URL entry with device type
     const url = await URL.create({
       shortId,
       shortUrl,
@@ -79,13 +87,13 @@ exports.shortUrlHandler = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Short url generated",
+      message: "Short URL generated successfully",
       url,
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({
-      message: "Something went wrong in shortening url",
+      message: "Something went wrong in shortening the URL",
       error: error.message,
     });
   }
@@ -454,7 +462,6 @@ exports.newUrl = async (req, res) => {
       return res.status(410).json({ message: "Link has expired" });
     }
 
-    // Ignore favicon requests
     if (req.originalUrl.includes("favicon.ico")) {
       return res.status(204).end();
     }
@@ -465,14 +472,10 @@ exports.newUrl = async (req, res) => {
     const result = parser.getResult();
     const os = result.os.name || "Unknown OS";
 
-    // Improved device type detection logic
-    let deviceType = "Desktop"; // Default to "Desktop" if no type is found
+    let deviceType = "Desktop";
 
-    // Explicitly check for mobile/tablet devices
     if (result.device.type === "mobile" || result.device.type === "tablet") {
       deviceType = "Mobile";
-    } else if (result.device.type === "other" || !result.device.type) {
-      deviceType = "Desktop"; // Fallback to "Desktop" if "other" or undefined
     }
 
     const getClientIp = (req) => {
@@ -491,7 +494,6 @@ exports.newUrl = async (req, res) => {
 
     const ipAddress = getClientIp(req);
 
-    // Check if there has been a recent entry from the same IP and OS within the last 2 seconds
     const recentEntry = await urlAnalytics.findOne({
       shortUrlId: entry._id,
       ipAddress,
@@ -507,11 +509,10 @@ exports.newUrl = async (req, res) => {
         userId: entry.userId,
         ipAddress,
         os,
-        deviceType,  // Store the correct device type in the analytics
+        deviceType,
         timestamp: new Date(),
       });
 
-      // Save visit log
       await visitLog.save();
 
       // Update visit history and URL visit count
@@ -522,12 +523,17 @@ exports.newUrl = async (req, res) => {
         visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
       }
 
-      // Increment URL visit count
-      entry.countOfUrl += 1;
+      // Increment desktop or mobile visit count
+      if (deviceType === "Desktop") {
+        entry.desktopClickCount = (entry.desktopClickCount || 0) + 1;
+      } else {
+        entry.mobileClickCount = (entry.mobileClickCount || 0) + 1;
+      }
+
+      entry.countOfUrl += 1; // Total click count
       await entry.save();
     }
 
-    // Redirect to the original URL
     res.redirect(entry.originalUrl);
   } catch (error) {
     res.status(500).json({
@@ -536,5 +542,6 @@ exports.newUrl = async (req, res) => {
     });
   }
 };
+
 
 

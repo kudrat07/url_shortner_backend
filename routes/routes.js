@@ -60,9 +60,6 @@ router.delete("/delete/url/:id", deleteUrl)
 //routes for getting a specific url
 router.get("/url/:urlId", getUrl)
 
-//routes to get updated count and status
-// router.get("/visit/:shortId", getUpdated)
-
 //routes to update a specific url
 router.put("/updateUrl/:urlId", updateUrl)
 
