@@ -36,7 +36,7 @@ exports.shortUrlHandler = async (req, res) => {
 
     const os = result.os.name || "Unknown OS";
 
-    let deviceType = result.device.type || "Desktop";
+    let deviceType = result.device.type;
     if (deviceType === "other") {
       deviceType = "Desktop";
     }
@@ -443,6 +443,7 @@ exports.newUrl = async (req, res) => {
   try {
     const { shortId } = req.params;
 
+    // Find the URL entry by shortId
     const entry = await URL.findOne({ shortId });
 
     if (!entry) {
@@ -458,24 +459,24 @@ exports.newUrl = async (req, res) => {
       return res.status(204).end();
     }
 
+    // Parse user-agent to detect the device
     const userAgent = req.headers["user-agent"];
     const parser = new UAParser(userAgent);
     const result = parser.getResult();
     const os = result.os.name || "Unknown OS";
 
-    // Improved device type detection
-    let deviceType = result.device.type || "Desktop";
+    // Improved device type detection logic
+    let deviceType = "Desktop"; // Default to "Desktop" if no type is found
 
     // Explicitly check for mobile/tablet devices
     if (result.device.type === "mobile" || result.device.type === "tablet") {
-      deviceType = "Mobile"; // Set device type as Mobile for mobile/tablet devices
-    } else if (deviceType === "other") {
-      deviceType = "Desktop"; // Default to Desktop if "other"
+      deviceType = "Mobile";
+    } else if (result.device.type === "other" || !result.device.type) {
+      deviceType = "Desktop"; // Fallback to "Desktop" if "other" or undefined
     }
 
     const getClientIp = (req) => {
-      let ipAddress =
-        req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      let ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
       if (ipAddress && typeof ipAddress === "string") {
         ipAddress = ipAddress.split(",")[0].trim();
@@ -490,7 +491,7 @@ exports.newUrl = async (req, res) => {
 
     const ipAddress = getClientIp(req);
 
-    // Check if a similar entry exists within a short timeframe
+    // Check if there has been a recent entry from the same IP and OS within the last 2 seconds
     const recentEntry = await urlAnalytics.findOne({
       shortUrlId: entry._id,
       ipAddress,
@@ -506,12 +507,14 @@ exports.newUrl = async (req, res) => {
         userId: entry.userId,
         ipAddress,
         os,
-        deviceType, // Add device type here
+        deviceType,  // Store the correct device type in the analytics
         timestamp: new Date(),
       });
 
+      // Save visit log
       await visitLog.save();
 
+      // Update visit history and URL visit count
       const visitHistory = entry.visitHistory;
       if (visitHistory.length > 0) {
         visitHistory[visitHistory.length - 1].count += 1;
@@ -519,12 +522,12 @@ exports.newUrl = async (req, res) => {
         visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
       }
 
-      // Update URL visit count
+      // Increment URL visit count
       entry.countOfUrl += 1;
       await entry.save();
     }
 
-    // Redirect for normal user requests
+    // Redirect to the original URL
     res.redirect(entry.originalUrl);
   } catch (error) {
     res.status(500).json({
@@ -533,4 +536,5 @@ exports.newUrl = async (req, res) => {
     });
   }
 };
+
 
