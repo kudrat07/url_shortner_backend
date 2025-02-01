@@ -25,6 +25,7 @@ const {
   deleteUrl,
   getUrl,
   updateUrl,
+  getAnalytics,
 } = require("../controllers/url");
 
 //ROUTES FOR SIGN UP
@@ -64,5 +65,8 @@ router.get("/url/:urlId", getUrl)
 
 //routes to update a specific url
 router.put("/updateUrl/:urlId", updateUrl)
+
+//routes for get analytics
+router.get("/analytics/:userId", getAnalytics)
 
 module.exports = router;

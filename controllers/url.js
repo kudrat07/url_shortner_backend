@@ -1,8 +1,10 @@
 const URL = require("../models/url");
+const urlAnalytics = require("../models/analytics");
+// const useragent = require("useragent");
 const User = require("../models/userSchema");
 const crypto = require("crypto");
-const useragent = require("useragent");
 const { UAParser } = require("ua-parser-js");
+const useragent = require("user-agent");
 
 const BASE_URL = "https://url-shortner-backend-y538.onrender.com";
 
@@ -89,41 +91,6 @@ exports.shortUrlHandler = async (req, res) => {
   }
 };
 
-// Redirect to original url using shortURL
-exports.newUrl = async (req, res) => {
-  try {
-    const { shortId } = req.params;
-
-    const entry = await URL.findOne({ shortId });
-
-    if (!entry) {
-      return res.status(404).json({ message: "URL not found" });
-    }
-
-    if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
-      return res.status(410).json({ message: "Link has expired" });
-    }
-
-    const visitHistory = entry.visitHistory;
-    if (visitHistory.length > 0) {
-      visitHistory[visitHistory.length - 1].count += 1;
-    } else {
-      visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
-    }
-
-    entry.countOfUrl += 1;
-
-    await entry.save();
-
-    res.redirect(entry.originalUrl);
-  } catch (error) {
-    res.status(500).json({
-      message: "Something went wrong",
-      error: error.message,
-    });
-  }
-};
-
 // GET ALL URL
 exports.getAllUrls = async (req, res) => {
   try {
@@ -141,19 +108,32 @@ exports.getAllUrls = async (req, res) => {
     }
 
     const formatDate = (date) => {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
       const newDate = new Date(date);
       const month = months[newDate.getMonth()];
       const day = newDate.getDate();
       const year = newDate.getFullYear();
       let hours = newDate.getHours();
-      const minutes = newDate.getMinutes().toString().padStart(2, '0');
+      const minutes = newDate.getMinutes().toString().padStart(2, "0");
       const isAM = hours < 12;
-      
-      if (hours > 12) hours -= 12;  // Convert to 12-hour format
-      if (hours === 0) hours = 12;  // If hours is 0, set it to 12 (midnight)
-      const period = isAM ? 'AM' : 'PM';
-      
+
+      if (hours > 12) hours -= 12; // Convert to 12-hour format
+      if (hours === 0) hours = 12; // If hours is 0, set it to 12 (midnight)
+      const period = isAM ? "AM" : "PM";
+
       return `${month} ${day}, ${year} ${hours}:${minutes} ${period}`;
     };
 
@@ -183,7 +163,6 @@ exports.getAllUrls = async (req, res) => {
     });
   }
 };
-
 
 // DELETE A URL
 exports.deleteUrl = async (req, res) => {
@@ -247,43 +226,6 @@ exports.getUrl = async (req, res) => {
   }
 };
 
-// GET UPDATED COUNT AND STATUS
-
-// exports.getUpdated = async (req, res) => {
-//   try {
-//     const { shortId } = req.params;
-
-//     const entry = await URL.findOne({ shortId });
-
-//     if (!entry) {
-//       return res.status(404).json({ message: "URL not found" });
-//     }
-
-//     // INCREMENT THE COUNT
-//     entry.countOfUrl += 1;
-
-//     //Update the status based on expiry date
-//     if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
-//       entry.status = "Inactive";
-//     } else {
-//       entry.status = "Active";
-//     }
-
-//     // Save the updated entry
-//     await entry.save();
-
-//     res.json({
-//       countOfUrl: entry.countOfUrl,
-//       status: entry.status,
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       message: "Error updatingthe count and status",
-//       error: error.message,
-//     });
-//   }
-// };
-
 // UPDATE A URL
 exports.updateUrl = async (req, res) => {
   try {
@@ -325,11 +267,10 @@ exports.updateUrl = async (req, res) => {
   }
 };
 
-
-
+//GET TOTAL COUUNTS, DATE WISE COUNTS, DEVICE WISE COUNTS
 exports.getCount = async (req, res) => {
   try {
-    const userId = req.params.userId; 
+    const userId = req.params.userId;
     const results = await URL.find({ userId: userId });
 
     if (!results || results.length === 0) {
@@ -348,8 +289,8 @@ exports.getCount = async (req, res) => {
     // Function to format the date for visit history
     const formatDate = (dateStr) => {
       const date = new Date(dateStr);
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
       const year = date.getFullYear();
       return `${day}-${month}-${year}`;
     };
@@ -357,7 +298,7 @@ exports.getCount = async (req, res) => {
     // Loop through the URLs and accumulate counts based on deviceType
     results.forEach((doc) => {
       const deviceType = doc.deviceType;
-      
+
       // Loop through the visit history to accumulate counts
       doc.visitHistory.forEach((visit) => {
         const visitDate = formatDate(visit.timestamp);
@@ -379,14 +320,13 @@ exports.getCount = async (req, res) => {
     });
 
     const dateWiseClickArray = Object.entries(dateWiseClicks)
-  .map(([date, count]) => ({ date, count }))
-  .sort((a, b) => new Date(b.date) - new Date(a.date));  
-
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const last5DateWiseClickArray = dateWiseClickArray.slice(0, 5);
 
     let cumulativeClicks = 0;
-    const dateWiseClickWithCumulative = last5DateWiseClickArray.map(entry => {
+    const dateWiseClickWithCumulative = last5DateWiseClickArray.map((entry) => {
       cumulativeClicks += entry.count;
       return {
         ...entry,
@@ -397,15 +337,17 @@ exports.getCount = async (req, res) => {
     const allVisitHistory = results.flatMap((doc) => doc.visitHistory);
 
     // Convert deviceCounts object to an array format and include all device counts
-    const deviceCountArray = Object.entries(deviceCounts).map(([name, count]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      count,
-    }));
+    const deviceCountArray = Object.entries(deviceCounts).map(
+      ([name, count]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        count,
+      })
+    );
 
     res.status(200).json({
       success: true,
       totalCounts: results.reduce((sum, doc) => sum + doc.countOfUrl, 0),
-      deviceCounts: deviceCountArray, 
+      deviceCounts: deviceCountArray,
       dateWiseClicks: dateWiseClickWithCumulative,
       analytics: allVisitHistory,
     });
@@ -418,13 +360,200 @@ exports.getCount = async (req, res) => {
   }
 };
 
+// Redirect to original url using shortURL
+// exports.newUrl = async (req, res) => {
+//   try {
+//     const { shortId } = req.params;
+
+//     const entry = await URL.findOne({ shortId });
+
+//     if (!entry) {
+//       return res.status(404).json({ message: "URL not found" });
+//     }
+
+//     if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
+//       return res.status(410).json({ message: "Link has expired" });
+//     }
+
+//     // Ignore favicon requests
+//     if (req.originalUrl.includes("favicon.ico")) {
+//       return res.status(204).end();
+//     }
+
+//     const visitHistory = entry.visitHistory;
+//     if (visitHistory.length > 0) {
+//       visitHistory[visitHistory.length - 1].count += 1;
+//     } else {
+//       visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
+//     }
+
+//     entry.countOfUrl += 1;
+
+//     await entry.save();
+
+//     res.redirect(entry.originalUrl);
+//   } catch (error) {
+//     res.status(500).json({
+//       message: "Something went wrong",
+//       error: error.message,
+//     });
+//   }
+// };
+
+exports.newUrl = async (req, res) => {
+  try {
+    const { shortId } = req.params;
+
+    const entry = await URL.findOne({ shortId });
+
+    if (!entry) {
+      return res.status(404).json({ message: "URL not found" });
+    }
+
+    if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
+      return res.status(410).json({ message: "Link has expired" });
+    }
+
+    // Ignore favicon requests
+    if (req.originalUrl.includes("favicon.ico")) {
+      return res.status(204).end();
+    }
+
+    const userAgent = req.headers["user-agent"];
+    const parser = new UAParser(userAgent);
+    const result = parser.getResult();
+    const os = result.os.name || "Unknown OS";
+
+    let deviceType = result.device.type || "Desktop";
+    if (deviceType === "other") {
+      deviceType = "Desktop";
+    }
+
+    const getClientIp = (req) => {
+      let ipAddress =
+        req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+      if (ipAddress && typeof ipAddress === "string") {
+        ipAddress = ipAddress.split(",")[0].trim();
+      }
+
+      if (ipAddress.startsWith("::ffff:")) {
+        ipAddress = ipAddress.replace("::ffff:", "");
+      }
+
+      return ipAddress;
+    };
+
+    const ipAddress = getClientIp(req);
+    console.log("Client's IP Address:", ipAddress);
+
+    // Check if a similar entry exists within a short timeframe
+    const recentEntry = await urlAnalytics.findOne({
+      shortUrlId: entry._id,
+      ipAddress,
+      os,
+      timestamp: { $gte: new Date(Date.now() - 2000) },
+    });
+
+    if (!recentEntry) {
+      const visitLog = new urlAnalytics({
+        shortUrlId: entry._id,
+        originalUrl: entry.originalUrl,
+        shortUrl: entry.shortUrl,
+        userId:entry.userId,
+        ipAddress,
+        os,
+        timestamp: new Date(),
+      });
+
+      await visitLog.save();
+
+      const visitHistory = entry.visitHistory;
+      if (visitHistory.length > 0) {
+        visitHistory[visitHistory.length - 1].count += 1;
+      } else {
+        visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
+      }
+
+      // Update URL visit count
+      entry.countOfUrl += 1;
+      await entry.save();
+    }
+
+    // Redirect for normal user requests
+    res.redirect(entry.originalUrl);
+  } catch (error) {
+    res.status(500).json({
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
 
 
 
+exports.getAnalytics = async (req, res) => {
+  try {
+    const { userId } = req.params;
 
+    if (!userId) {
+      return res.status(400).json({
+        message: "User ID is not provided",
+      });
+    }
 
+    // Find user by ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        message: "User doesn't exist",
+      });
+    }
 
+    const analyticsData = await urlAnalytics.find({ userId });
 
+    if (!analyticsData || analyticsData.length === 0) {
+      return res.status(200).json({
+        analyticsData: [],
+      });
+    }
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    const formattedData = analyticsData.map((entry) => {
+      if (!entry.createdAt) return { ...entry._doc, formattedDate: "No timestamp available" };
+
+      const date = new Date(entry.createdAt);
+      const month = monthNames[date.getMonth()];
+      const day = date.getDate();
+      const year = date.getFullYear();
+
+      // Time formatting in 12-hour format with AM/PM
+      let hours = date.getHours();
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const seconds = String(date.getSeconds()).padStart(2, "0");
+      const amPm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12; // Convert to 12-hour format
+
+      const formattedDate = `${month} ${day}, ${year} ${hours}:${minutes}:${seconds} ${amPm}`;
+
+      return {
+        ...entry._doc,
+        formattedDate,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      analyticsData: formattedData,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
 
 
 
