@@ -360,138 +360,7 @@ exports.getCount = async (req, res) => {
   }
 };
 
-// Redirect to original url using shortURL
-// exports.newUrl = async (req, res) => {
-//   try {
-//     const { shortId } = req.params;
-
-//     const entry = await URL.findOne({ shortId });
-
-//     if (!entry) {
-//       return res.status(404).json({ message: "URL not found" });
-//     }
-
-//     if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
-//       return res.status(410).json({ message: "Link has expired" });
-//     }
-
-//     // Ignore favicon requests
-//     if (req.originalUrl.includes("favicon.ico")) {
-//       return res.status(204).end();
-//     }
-
-//     const visitHistory = entry.visitHistory;
-//     if (visitHistory.length > 0) {
-//       visitHistory[visitHistory.length - 1].count += 1;
-//     } else {
-//       visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
-//     }
-
-//     entry.countOfUrl += 1;
-
-//     await entry.save();
-
-//     res.redirect(entry.originalUrl);
-//   } catch (error) {
-//     res.status(500).json({
-//       message: "Something went wrong",
-//       error: error.message,
-//     });
-//   }
-// };
-
-exports.newUrl = async (req, res) => {
-  try {
-    const { shortId } = req.params;
-
-    const entry = await URL.findOne({ shortId });
-
-    if (!entry) {
-      return res.status(404).json({ message: "URL not found" });
-    }
-
-    if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
-      return res.status(410).json({ message: "Link has expired" });
-    }
-
-    // Ignore favicon requests
-    if (req.originalUrl.includes("favicon.ico")) {
-      return res.status(204).end();
-    }
-
-    const userAgent = req.headers["user-agent"];
-    const parser = new UAParser(userAgent);
-    const result = parser.getResult();
-    const os = result.os.name || "Unknown OS";
-
-    let deviceType = result.device.type || "Desktop";
-    if (deviceType === "other") {
-      deviceType = "Desktop";
-    }
-
-    const getClientIp = (req) => {
-      let ipAddress =
-        req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-
-      if (ipAddress && typeof ipAddress === "string") {
-        ipAddress = ipAddress.split(",")[0].trim();
-      }
-
-      if (ipAddress.startsWith("::ffff:")) {
-        ipAddress = ipAddress.replace("::ffff:", "");
-      }
-
-      return ipAddress;
-    };
-
-    const ipAddress = getClientIp(req);
-    console.log("Client's IP Address:", ipAddress);
-
-    // Check if a similar entry exists within a short timeframe
-    const recentEntry = await urlAnalytics.findOne({
-      shortUrlId: entry._id,
-      ipAddress,
-      os,
-      timestamp: { $gte: new Date(Date.now() - 2000) },
-    });
-
-    if (!recentEntry) {
-      const visitLog = new urlAnalytics({
-        shortUrlId: entry._id,
-        originalUrl: entry.originalUrl,
-        shortUrl: entry.shortUrl,
-        userId:entry.userId,
-        ipAddress,
-        os,
-        timestamp: new Date(),
-      });
-
-      await visitLog.save();
-
-      const visitHistory = entry.visitHistory;
-      if (visitHistory.length > 0) {
-        visitHistory[visitHistory.length - 1].count += 1;
-      } else {
-        visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
-      }
-
-      // Update URL visit count
-      entry.countOfUrl += 1;
-      await entry.save();
-    }
-
-    // Redirect for normal user requests
-    res.redirect(entry.originalUrl);
-  } catch (error) {
-    res.status(500).json({
-      message: "Something went wrong",
-      error: error.message,
-    });
-  }
-};
-
-
-
+// GET ANALYTICS OF VISITED LINKS
 exports.getAnalytics = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -518,10 +387,24 @@ exports.getAnalytics = async (req, res) => {
       });
     }
 
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
 
     const formattedData = analyticsData.map((entry) => {
-      if (!entry.createdAt) return { ...entry._doc, formattedDate: "No timestamp available" };
+      if (!entry.createdAt)
+        return { ...entry._doc, formattedDate: "No timestamp available" };
 
       const date = new Date(entry.createdAt);
       const month = monthNames[date.getMonth()];
@@ -555,7 +438,99 @@ exports.getAnalytics = async (req, res) => {
   }
 };
 
+// REDIRECT TO ORIGINAL URL USING SHORT URL
+exports.newUrl = async (req, res) => {
+  try {
+    const { shortId } = req.params;
 
+    const entry = await URL.findOne({ shortId });
 
+    if (!entry) {
+      return res.status(404).json({ message: "URL not found" });
+    }
 
+    if (entry.expiryDate && new Date(entry.expiryDate) < new Date()) {
+      return res.status(410).json({ message: "Link has expired" });
+    }
+
+    // Ignore favicon requests
+    if (req.originalUrl.includes("favicon.ico")) {
+      return res.status(204).end();
+    }
+
+    const userAgent = req.headers["user-agent"];
+    const parser = new UAParser(userAgent);
+    const result = parser.getResult();
+    const os = result.os.name || "Unknown OS";
+
+    // Improved device type detection
+    let deviceType = result.device.type || "Desktop";
+
+    // Explicitly check for mobile/tablet devices
+    if (result.device.type === "mobile" || result.device.type === "tablet") {
+      deviceType = "Mobile"; // Set device type as Mobile for mobile/tablet devices
+    } else if (deviceType === "other") {
+      deviceType = "Desktop"; // Default to Desktop if "other"
+    }
+
+    const getClientIp = (req) => {
+      let ipAddress =
+        req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+      if (ipAddress && typeof ipAddress === "string") {
+        ipAddress = ipAddress.split(",")[0].trim();
+      }
+
+      if (ipAddress.startsWith("::ffff:")) {
+        ipAddress = ipAddress.replace("::ffff:", "");
+      }
+
+      return ipAddress;
+    };
+
+    const ipAddress = getClientIp(req);
+
+    // Check if a similar entry exists within a short timeframe
+    const recentEntry = await urlAnalytics.findOne({
+      shortUrlId: entry._id,
+      ipAddress,
+      os,
+      timestamp: { $gte: new Date(Date.now() - 2000) },
+    });
+
+    if (!recentEntry) {
+      const visitLog = new urlAnalytics({
+        shortUrlId: entry._id,
+        originalUrl: entry.originalUrl,
+        shortUrl: entry.shortUrl,
+        userId: entry.userId,
+        ipAddress,
+        os,
+        deviceType, // Add device type here
+        timestamp: new Date(),
+      });
+
+      await visitLog.save();
+
+      const visitHistory = entry.visitHistory;
+      if (visitHistory.length > 0) {
+        visitHistory[visitHistory.length - 1].count += 1;
+      } else {
+        visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
+      }
+
+      // Update URL visit count
+      entry.countOfUrl += 1;
+      await entry.save();
+    }
+
+    // Redirect for normal user requests
+    res.redirect(entry.originalUrl);
+  } catch (error) {
+    res.status(500).json({
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
 
