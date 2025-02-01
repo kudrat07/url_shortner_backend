@@ -473,35 +473,36 @@ exports.newUrl = async (req, res) => {
     const os = result.os.name || "Unknown OS";
 
     let deviceType = "Desktop";
-
     if (result.device.type === "mobile" || result.device.type === "tablet") {
       deviceType = "Mobile";
     }
 
     const getClientIp = (req) => {
       let ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-
       if (ipAddress && typeof ipAddress === "string") {
         ipAddress = ipAddress.split(",")[0].trim();
       }
-
       if (ipAddress.startsWith("::ffff:")) {
         ipAddress = ipAddress.replace("::ffff:", "");
       }
-
       return ipAddress;
     };
 
     const ipAddress = getClientIp(req);
 
-    const recentEntry = await urlAnalytics.findOne({
+    // Log unique visit using device type and IP for accurate analytics
+    const visitLogData = {
       shortUrlId: entry._id,
       ipAddress,
       os,
-      timestamp: { $gte: new Date(Date.now() - 2000) },
-    });
+      deviceType,
+      timestamp: { $gte: new Date(Date.now() - 3000) }, // Detect duplicate visits within a 3-second window
+    };
 
-    if (!recentEntry) {
+    const visitExists = await urlAnalytics.exists(visitLogData);
+
+    if (!visitExists) {
+      // Save the visit log entry
       const visitLog = new urlAnalytics({
         shortUrlId: entry._id,
         originalUrl: entry.originalUrl,
@@ -515,23 +516,31 @@ exports.newUrl = async (req, res) => {
 
       await visitLog.save();
 
-      // Update visit history and URL visit count
-      const visitHistory = entry.visitHistory;
-      if (visitHistory.length > 0) {
-        visitHistory[visitHistory.length - 1].count += 1;
-      } else {
-        visitHistory.push({ timestamp: new Date().toISOString(), count: 1 });
-      }
+      // Use transactions to guarantee count accuracy
+      const session = await URL.startSession();
+      session.startTransaction();
 
-      // Increment desktop or mobile visit count
-      if (deviceType === "Desktop") {
-        entry.desktopClickCount = (entry.desktopClickCount || 0) + 1;
-      } else {
-        entry.mobileClickCount = (entry.mobileClickCount || 0) + 1;
-      }
+      try {
+        // Update URL visit count and ensure atomicity
+        await URL.findByIdAndUpdate(
+          entry._id,
+          {
+            $inc: {
+              countOfUrl: 1,
+              [deviceType === "Desktop" ? "desktopClickCount" : "mobileClickCount"]: 1,
+            },
+            $push: { visitHistory: { timestamp: new Date().toISOString(), count: 1 } },
+          },
+          { new: true, session }
+        );
 
-      entry.countOfUrl += 1; // Total click count
-      await entry.save();
+        await session.commitTransaction();
+      } catch (error) {
+        await session.abortTransaction();
+        throw error;
+      } finally {
+        session.endSession();
+      }
     }
 
     res.redirect(entry.originalUrl);
@@ -542,6 +551,10 @@ exports.newUrl = async (req, res) => {
     });
   }
 };
+
+
+
+
 
 
 
